@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Simulateur d'Écosystème Évolutif Scientifique</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #e0f7fa;
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    h1, h3, h4 {
+      color: #004d40;
+    }
+    #control-panel, #entity-params {
+      background: #ffffff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 15px;
+      width: 800px;
+      display: flex;
+      justify-content: space-around;
+      flex-wrap: wrap;
+    }
+    #control-panel div, #entity-params div {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin: 5px;
+    }
+    #simulationCanvas {
+      background: #f0f4c3;
+      border: 2px solid #666;
+      margin-bottom: 15px;
+    }
+    #stats {
+      width: 800px;
+      background: #ffffff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 15px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-around;
+    }
+    #stats p {
+      margin: 5px 10px;
+    }
+    #chartCanvas {
+      background: #ffffff;
+      border: 1px solid #ccc;
+      margin-bottom: 15px;
+    }
+    #mutationDetails {
+      width: 800px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 10px;
+      margin-bottom: 15px;
+      display: none;
+    }
+    button {
+      margin-bottom: 15px;
+      padding: 8px 12px;
+      font-size: 1em;
+      cursor: pointer;
+    }
+    input[type="number"] {
+      width: 80px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Simulateur d'Écosystème Évolutif Scientifique</h1>
+  
+  <!-- Panneau de contrôle global -->
+  <div id="control-panel">
+    <div>
+      <label for="plantGrowthSlider">Taux de croissance des plantes (%)</label>
+      <input type="range" id="plantGrowthSlider" min="1" max="20" value="10">
+      <span id="plantGrowthValue">10%</span>
+    </div>
+    <div>
+      <label for="diseaseSlider">Probabilité d'infection (%)</label>
+      <input type="range" id="diseaseSlider" min="0" max="100" value="30">
+      <span id="diseaseValue">30%</span>
+    </div>
+    <div>
+      <label for="mutationRateSlider">Taux de mutation (%)</label>
+      <input type="range" id="mutationRateSlider" min="0" max="50" value="5">
+      <span id="mutationRateValue">5%</span>
+    </div>
+  </div>
+  
+  <!-- Panneau de réglage des paramètres de base des entités -->
+  <div id="entity-params">
+    <h3>Paramètres de base</h3>
+    <div>
+      <h4>Herbivores</h4>
+      <label for="herbSpeed">Vitesse</label>
+      <input type="number" id="herbSpeed" value="1.5" step="0.1">
+      <label for="herbVision">Vision</label>
+      <input type="number" id="herbVision" value="200" step="10">
+      <label for="herbMetab">Métabolisme</label>
+      <input type="number" id="herbMetab" value="0.01" step="0.001">
+    </div>
+    <div>
+      <h4>Carnivores</h4>
+      <label for="carnSpeed">Vitesse</label>
+      <input type="number" id="carnSpeed" value="2" step="0.1">
+      <label for="carnVision">Vision</label>
+      <input type="number" id="carnVision" value="250" step="10">
+      <label for="carnMetab">Métabolisme</label>
+      <input type="number" id="carnMetab" value="0.015" step="0.001">
+      <label for="carnIntel">Intelligence</label>
+      <input type="number" id="carnIntel" value="1" step="0.1">
+    </div>
+    <div>
+      <h4>Reproduction</h4>
+      <label for="reproductionSpeedSlider">Vitesse de reproduction (facteur)</label>
+      <input type="range" id="reproductionSpeedSlider" min="50" max="300" value="100">
+      <span id="reproductionSpeedValue">100</span>
+    </div>
+  </div>
+  
+  <!-- Canvas de la simulation -->
+  <canvas id="simulationCanvas" width="800" height="600"></canvas>
+  
+  <!-- Panneau des statistiques -->
+  <div id="stats">
+    <p>Plantes : <span id="plantCount">0</span></p>
+    <p>Herbivores : <span id="herbivoreCount">0</span> - Génération moyenne : <span id="herbGenerationAvg">1</span></p>
+    <p>Carnivores : <span id="carnivoreCount">0</span> - Génération moyenne : <span id="carnGenerationAvg">1</span></p>
+    <p>Saison : <span id="seasonName"></span></p>
+    <p>Température : <span id="temperature"></span> °C</p>
+  </div>
+  
+  <!-- Bouton et zone d'affichage de l'analyse évolutive -->
+  <button id="showMutationsBtn">Afficher l'analyse évolutive</button>
+  <div id="mutationDetails"></div>
+  
+  <!-- Canvas pour le graphique interactif -->
+  <canvas id="chartCanvas" width="800" height="200"></canvas>
+  
+  <!-- Inclusion de Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    // -------------------------------------------------------
+    // PARAMÈTRES GLOBAUX ET INITIALISATION
+    // -------------------------------------------------------
+    const canvas = document.getElementById('simulationCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Contrôles généraux
+    const plantGrowthSlider = document.getElementById('plantGrowthSlider');
+    const plantGrowthValue = document.getElementById('plantGrowthValue');
+    const diseaseSlider = document.getElementById('diseaseSlider');
+    const diseaseValue = document.getElementById('diseaseValue');
+    const mutationRateSlider = document.getElementById('mutationRateSlider');
+    const mutationRateValue = document.getElementById('mutationRateValue');
+    
+    plantGrowthSlider.addEventListener('input', function() {
+      plantGrowthValue.textContent = this.value + '%';
+    });
+    diseaseSlider.addEventListener('input', function() {
+      diseaseValue.textContent = this.value + '%';
+    });
+    mutationRateSlider.addEventListener('input', function() {
+      mutationRateValue.textContent = this.value + '%';
+    });
+    
+    function getPlantGrowthProbability() { return plantGrowthSlider.value / 100; }
+    function getDiseaseInfectionProbability() { return diseaseSlider.value / 100; }
+    function getMutationRate() { return mutationRateSlider.value / 100; }
+    
+    // Contrôles des paramètres de base (pour nouvelles entités)
+    let baseHerbSpeed = parseFloat(document.getElementById('herbSpeed').value);
+    let baseHerbVision = parseFloat(document.getElementById('herbVision').value);
+    let baseHerbMetab = parseFloat(document.getElementById('herbMetab').value);
+    let baseCarnSpeed = parseFloat(document.getElementById('carnSpeed').value);
+    let baseCarnVision = parseFloat(document.getElementById('carnVision').value);
+    let baseCarnMetab = parseFloat(document.getElementById('carnMetab').value);
+    let baseCarnIntel = parseFloat(document.getElementById('carnIntel').value);
+    
+    document.getElementById('herbSpeed').addEventListener('change', (e) => { baseHerbSpeed = parseFloat(e.target.value); });
+    document.getElementById('herbVision').addEventListener('change', (e) => { baseHerbVision = parseFloat(e.target.value); });
+    document.getElementById('herbMetab').addEventListener('change', (e) => { baseHerbMetab = parseFloat(e.target.value); });
+    document.getElementById('carnSpeed').addEventListener('change', (e) => { baseCarnSpeed = parseFloat(e.target.value); });
+    document.getElementById('carnVision').addEventListener('change', (e) => { baseCarnVision = parseFloat(e.target.value); });
+    document.getElementById('carnMetab').addEventListener('change', (e) => { baseCarnMetab = parseFloat(e.target.value); });
+    document.getElementById('carnIntel').addEventListener('change', (e) => { baseCarnIntel = parseFloat(e.target.value); });
+    
+    // Vitesse de reproduction : un facteur qui multiplie le délai de reproduction (100 = normal)
+    let reproductionSpeedFactor = 1;
+    const reproductionSpeedSlider = document.getElementById('reproductionSpeedSlider');
+    const reproductionSpeedValue = document.getElementById('reproductionSpeedValue');
+    reproductionSpeedSlider.addEventListener('input', function() {
+      reproductionSpeedValue.textContent = this.value;
+      reproductionSpeedFactor = this.value / 100;
+    });
+    
+    // Système saisonnier (inspiré de cycles environnementaux réels)
+    const seasons = ["Printemps", "Été", "Automne", "Hiver"];
+    const seasonTemperatures = { "Printemps": 18, "Été": 30, "Automne": 15, "Hiver": 5 };
+    let currentSeasonIndex = 0;
+    let currentSeason = seasons[currentSeasonIndex];
+    let currentTemperature = seasonTemperatures[currentSeason];
+    const seasonDuration = 15000; // 15 secondes par saison
+    let lastSeasonChange = Date.now();
+    
+    function updateSeason() {
+      const now = Date.now();
+      if (now - lastSeasonChange > seasonDuration) {
+        currentSeasonIndex = (currentSeasonIndex + 1) % seasons.length;
+        lastSeasonChange = now;
+      }
+      currentSeason = seasons[currentSeasonIndex];
+      currentTemperature = seasonTemperatures[currentSeason];
+      document.getElementById('seasonName').textContent = currentSeason;
+      document.getElementById('temperature').textContent = currentTemperature;
+      // Modification du fond du canvas selon la saison
+      switch(currentSeason) {
+        case "Printemps": canvas.style.background = "#e8f5e9"; break;
+        case "Été":      canvas.style.background = "#fff9c4"; break;
+        case "Automne":  canvas.style.background = "#ffe0b2"; break;
+        case "Hiver":    canvas.style.background = "#e3f2fd"; break;
+      }
+    }
+    
+    // -------------------------------------------------------
+    // FONCTIONS D'AIDE : MUTATION AVEC RANDOM GAUSSIEN
+    // -------------------------------------------------------
+    // Inspiré par la méthode de Box-Muller pour obtenir une distribution normale,
+    // ce qui est courant en génétique quantitative (ex. l'équation du sélectionneur)
+    function gaussianRandom() {
+      let u = 0, v = 0;
+      while(u === 0) u = Math.random();
+      while(v === 0) v = Math.random();
+      return Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+    }
+    
+    // Applique une mutation à un trait.
+    // Pour les traits "positifs" (vitesse, vision, intelligence), un boost directionnel est appliqué
+    // en fonction de l'énergie du parent (modélisant la sélection naturelle).
+    function mutateTrait(value, boost = 0) {
+      const rate = getMutationRate();
+      return value * (1 + gaussianRandom() * rate) * (1 + boost);
+    }
+    
+    // Pour les traits où une diminution est souhaitable (ex. métabolisme), on inverse le boost.
+    function mutateTraitDecreasing(value, boost = 0) {
+      const rate = getMutationRate();
+      return value * (1 + gaussianRandom() * rate) * (1 - boost);
+    }
+    
+    // -------------------------------------------------------
+    // CLASSES DES ENTITÉS DE L'ÉCOSYSTÈME
+    // -------------------------------------------------------
+    
+    // Plantes avec un trait "défense" et un suivi de génération
+    class Plant {
+      constructor(x, y, defense = 0, generation = 1) {
+        this.x = x;
+        this.y = y;
+        this.defense = defense;
+        this.generation = generation;
+      }
+      draw(ctx) {
+        ctx.fillStyle = 'green';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // Classe de base pour les animaux (incluant génération)
+    class Animal {
+      constructor(x, y, speed, energy, reproductionThreshold, maxAge, visionRange, metabolism, generation = 1) {
+        this.x = x;
+        this.y = y;
+        this.speed = speed;
+        this.energy = energy;
+        this.reproductionThreshold = reproductionThreshold;
+        this.age = 0;
+        this.maxAge = maxAge;
+        this.reproductionCooldown = 0;
+        this.visionRange = visionRange;
+        this.metabolism = metabolism;
+        this.infected = false;
+        this.infectionTime = 0;
+        this.generation = generation;
+      }
+      moveTowards(targetX, targetY) {
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > 1) {
+          this.x += (dx / dist) * this.speed;
+          this.y += (dy / dist) * this.speed;
+        } else {
+          this.moveRandom();
+        }
+        this.boundaryCheck();
+      }
+      moveRandom() {
+        const angle = Math.random() * Math.PI * 2;
+        this.x += Math.cos(angle) * this.speed;
+        this.y += Math.sin(angle) * this.speed;
+        this.boundaryCheck();
+      }
+      boundaryCheck() {
+        if (this.x < 0) this.x = 0;
+        if (this.x > canvas.width) this.x = canvas.width;
+        if (this.y < 0) this.y = 0;
+        if (this.y > canvas.height) this.y = canvas.height;
+      }
+      applyCompetition(neighbors) {
+        let count = 0;
+        for (let neighbor of neighbors) {
+          const dx = neighbor.x - this.x;
+          const dy = neighbor.y - this.y;
+          if (Math.sqrt(dx * dx + dy * dy) < 20) count++;
+        }
+        if (count > 3) this.energy -= 0.1;
+      }
+      updateAge() {
+        this.age++;
+        if (this.age > this.maxAge) this.energy = 0;
+      }
+    }
+    
+    // Herbivores qui se nourrissent des plantes et évoluent par génération
+    class Herbivore extends Animal {
+      update(plants, herbivores) {
+        this.updateAge();
+        if (this.reproductionCooldown > 0) this.reproductionCooldown--;
+        
+        // Recherche de la plante la plus proche
+        let targetPlant = null, minDist = Infinity;
+        for (let plant of plants) {
+          const dx = plant.x - this.x;
+          const dy = plant.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < minDist && dist < this.visionRange) {
+            minDist = dist;
+            targetPlant = plant;
+          }
+        }
+        
+        if (targetPlant) {
+          this.moveTowards(targetPlant.x, targetPlant.y);
+          if (minDist < 10) {
+            // Gain d'énergie influencé par la défense de la plante
+            const energyGain = Math.max(0, 25 - targetPlant.defense);
+            this.energy += energyGain;
+            plants.splice(plants.indexOf(targetPlant), 1);
+            // Reproduction végétale (plantation mutée) avec 2% de chance
+            if (Math.random() < 0.02) {
+              const childGen = targetPlant.generation + 1;
+              const newPlant = new Plant(
+                targetPlant.x + (Math.random() * 10 - 5),
+                targetPlant.y + (Math.random() * 10 - 5),
+                mutateTrait(targetPlant.defense), 
+                childGen
+              );
+              plants.push(newPlant);
+            }
+          }
+        } else {
+          this.moveRandom();
+        }
+        
+        // Consommation d'énergie et impact saisonnier
+        this.energy -= this.metabolism;
+        if (currentSeason === "Hiver") this.energy -= 0.005;
+        if (this.infected) this.energy -= 0.005;
+        
+        this.applyCompetition(herbivores);
+        
+        // Transmission de la maladie
+        if (this.infected) {
+          for (let other of herbivores) {
+            if (!other.infected && other !== this) {
+              const dx = other.x - this.x;
+              const dy = other.y - this.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 30 && Math.random() < getDiseaseInfectionProbability()) {
+                other.infected = true;
+              }
+            }
+          }
+          this.infectionTime++;
+          if (this.infectionTime > 500) {
+            if (Math.random() < 0.5) { this.infected = false; this.infectionTime = 0; }
+            else { this.energy = 0; }
+          }
+        }
+        
+        // Reproduction basée sur le succès (énergie élevée favorise une amélioration des traits)
+        if (this.energy > this.reproductionThreshold && this.reproductionCooldown === 0) {
+          const boost = this.energy / (this.reproductionThreshold * 10); // facteur de sélection (modéré)
+          // Le facteur de reproduction est modulé par le slider (reproductionSpeedFactor)
+          const child = new Herbivore(
+            this.x, this.y,
+            mutateTrait(this.speed, boost),
+            this.energy / 2,
+            this.reproductionThreshold,
+            this.maxAge,
+            mutateTrait(this.visionRange, boost),
+            mutateTraitDecreasing(this.metabolism, boost),
+            this.generation + 1
+          );
+          herbivores.push(child);
+          this.energy /= 2;
+          this.reproductionCooldown = 100 * reproductionSpeedFactor;
+        }
+      }
+      draw(ctx) {
+        ctx.fillStyle = this.infected ? 'purple' : 'blue';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 5, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // Carnivores qui chassent les herbivores et évoluent par génération
+    class Carnivore extends Animal {
+      update(herbivores, carnivores) {
+        this.updateAge();
+        if (this.reproductionCooldown > 0) this.reproductionCooldown--;
+        
+        // Recherche de la proie la plus proche (en tenant compte de l'intelligence)
+        let targetHerbivore = null, minDist = Infinity;
+        for (let herb of herbivores) {
+          const dx = herb.x - this.x;
+          const dy = herb.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < minDist && dist < this.visionRange * this.intelligence) {
+            minDist = dist;
+            targetHerbivore = herb;
+          }
+        }
+        
+        if (targetHerbivore) {
+          this.moveTowards(targetHerbivore.x, targetHerbivore.y);
+          if (minDist < 10) {
+            herbivores.splice(herbivores.indexOf(targetHerbivore), 1);
+            this.energy += 35;
+          }
+        } else {
+          this.moveRandom();
+        }
+        
+        this.energy -= this.metabolism;
+        if (currentSeason === "Hiver") this.energy -= 0.007;
+        if (this.infected) this.energy -= 0.007;
+        
+        this.applyCompetition(carnivores);
+        
+        // Transmission de la maladie
+        if (this.infected) {
+          for (let other of carnivores) {
+            if (!other.infected && other !== this) {
+              const dx = other.x - this.x;
+              const dy = other.y - this.y;
+              if (Math.sqrt(dx * dx + dy * dy) < 30 && Math.random() < getDiseaseInfectionProbability()) {
+                other.infected = true;
+              }
+            }
+          }
+          this.infectionTime++;
+          if (this.infectionTime > 500) {
+            if (Math.random() < 0.5) { this.infected = false; this.infectionTime = 0; }
+            else { this.energy = 0; }
+          }
+        }
+        
+        // Reproduction avec sélection directionnelle
+        if (this.energy > this.reproductionThreshold && this.reproductionCooldown === 0) {
+          const boost = this.energy / (this.reproductionThreshold * 10);
+          const child = new Carnivore(
+            this.x, this.y,
+            mutateTrait(this.speed, boost),
+            this.energy / 2,
+            this.reproductionThreshold,
+            this.maxAge,
+            mutateTrait(this.visionRange, boost),
+            mutateTraitDecreasing(this.metabolism, boost),
+            mutateTrait(this.intelligence, boost),
+            this.generation + 1
+          );
+          carnivores.push(child);
+          this.energy /= 2;
+          this.reproductionCooldown = 150 * reproductionSpeedFactor;
+        }
+      }
+      draw(ctx) {
+        ctx.fillStyle = this.infected ? 'orange' : 'red';
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, 7, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    
+    // -------------------------------------------------------
+    // INITIALISATION DE L'ÉCOSYSTÈME
+    // -------------------------------------------------------
+    let plants = [];
+    let herbivores = [];
+    let carnivores = [];
+    
+    // Capacité porteuse pour les plantes (modèle logistique)
+    const plantCarryingCapacity = 300;
+    
+    // Création initiale des plantes (génération 1)
+    for (let i = 0; i < 150; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      plants.push(new Plant(x, y, Math.random() * 5, 1));
+    }
+    
+    // Création initiale des herbivores avec paramètres de base
+    for (let i = 0; i < 30; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      herbivores.push(new Herbivore(x, y, baseHerbSpeed, 80, 70, 2000, baseHerbVision, baseHerbMetab, 1));
+    }
+    
+    // Création initiale des carnivores avec paramètres de base
+    for (let i = 0; i < 10; i++) {
+      const x = Math.random() * canvas.width;
+      const y = Math.random() * canvas.height;
+      carnivores.push(new Carnivore(x, y, baseCarnSpeed, 100, 90, 2500, baseCarnVision, baseCarnMetab, baseCarnIntel, 1));
+    }
+    
+    // -------------------------------------------------------
+    // GRAPHIQUES ET STATISTIQUES
+    // -------------------------------------------------------
+    let timeStep = 0;
+    const chartLabels = [];
+    const plantHistory = [];
+    const herbivoreHistory = [];
+    const carnivoreHistory = [];
+    
+    const ctxChart = document.getElementById('chartCanvas').getContext('2d');
+    const populationChart = new Chart(ctxChart, {
+      type: 'line',
+      data: {
+        labels: chartLabels,
+        datasets: [
+          { label: 'Plantes', borderColor: 'green', data: plantHistory, fill: false },
+          { label: 'Herbivores', borderColor: 'blue', data: herbivoreHistory, fill: false },
+          { label: 'Carnivores', borderColor: 'red', data: carnivoreHistory, fill: false }
+        ]
+      },
+      options: {
+        animation: false,
+        responsive: false,
+        scales: {
+          x: { display: true, title: { display: true, text: 'Temps' } },
+          y: { display: true, title: { display: true, text: 'Population' }, beginAtZero: true }
+        }
+      }
+    });
+    
+    // Bouton d'analyse évolutive
+    document.getElementById('showMutationsBtn').addEventListener('click', function() {
+      // Calcul des moyennes de traits et de générations
+      const avgHerbSpeed = herbivores.length ? herbivores.reduce((sum, h) => sum + h.speed, 0) / herbivores.length : 0;
+      const avgHerbVision = herbivores.length ? herbivores.reduce((sum, h) => sum + h.visionRange, 0) / herbivores.length : 0;
+      const avgHerbMetab = herbivores.length ? herbivores.reduce((sum, h) => sum + h.metabolism, 0) / herbivores.length : 0;
+      const avgHerbGen = herbivores.length ? herbivores.reduce((sum, h) => sum + h.generation, 0) / herbivores.length : 1;
+      
+      const avgCarnSpeed = carnivores.length ? carnivores.reduce((sum, c) => sum + c.speed, 0) / carnivores.length : 0;
+      const avgCarnVision = carnivores.length ? carnivores.reduce((sum, c) => sum + c.visionRange, 0) / carnivores.length : 0;
+      const avgCarnMetab = carnivores.length ? carnivores.reduce((sum, c) => sum + c.metabolism, 0) / carnivores.length : 0;
+      const avgCarnIntel = carnivores.length ? carnivores.reduce((sum, c) => sum + c.intelligence, 0) / carnivores.length : 0;
+      const avgCarnGen = carnivores.length ? carnivores.reduce((sum, c) => sum + c.generation, 0) / carnivores.length : 1;
+      
+      const avgPlantDefense = plants.length ? plants.reduce((sum, p) => sum + p.defense, 0) / plants.length : 0;
+      
+      let explanation = "<h3>Analyse évolutive</h3>";
+      explanation += "<p><strong>Herbivores</strong> (Génération moyenne : " + avgHerbGen.toFixed(2) + ") :<br>" +
+                     "Vitesse moyenne = " + avgHerbSpeed.toFixed(2) + "<br>" +
+                     "Vision moyenne = " + avgHerbVision.toFixed(2) + "<br>" +
+                     "Métabolisme moyen = " + avgHerbMetab.toFixed(4) + "</p>";
+      explanation += "<p><strong>Carnivores</strong> (Génération moyenne : " + avgCarnGen.toFixed(2) + ") :<br>" +
+                     "Vitesse moyenne = " + avgCarnSpeed.toFixed(2) + "<br>" +
+                     "Vision moyenne = " + avgCarnVision.toFixed(2) + "<br>" +
+                     "Métabolisme moyen = " + avgCarnMetab.toFixed(4) + "<br>" +
+                     "Intelligence moyenne = " + avgCarnIntel.toFixed(2) + "</p>";
+      explanation += "<p><strong>Plantes</strong> :<br>" +
+                     "Défense moyenne = " + avgPlantDefense.toFixed(2) + "</p>";
+      explanation += "<p>Les mutations s'inspirent d'approches scientifiques (p.ex. modèle logistique, équation du sélectionneur) " +
+                     "et favorisent, au fil des générations, une amélioration des traits chez les individus les mieux adaptés.</p>";
+      
+      const mutationDiv = document.getElementById('mutationDetails');
+      mutationDiv.innerHTML = explanation;
+      mutationDiv.style.display = (mutationDiv.style.display === 'none' || mutationDiv.style.display === '') ? 'block' : 'none';
+    });
+    
+    // -------------------------------------------------------
+    // BOUCLE DE SIMULATION
+    // -------------------------------------------------------
+    let lastStormTime = Date.now();
+    const stormInterval = 30000; // Tempête potentielle toutes les 30 secondes
+    
+    function simulationStep() {
+      updateSeason();
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      // Tempête aléatoire (affecte les populations selon un modèle de stress environnemental)
+      if (Date.now() - lastStormTime > stormInterval && Math.random() < 0.05) {
+        herbivores.forEach(h => h.energy *= 0.9);
+        carnivores.forEach(c => c.energy *= 0.9);
+        const plantsToRemove = Math.floor(plants.length * 0.1);
+        plants.splice(0, plantsToRemove);
+        lastStormTime = Date.now();
+        console.log("Tempête !");
+      }
+      
+      // Mise à jour des entités
+      herbivores.forEach(h => h.update(plants, herbivores));
+      carnivores.forEach(c => c.update(herbivores, carnivores));
+      
+      // Suppression des entités mortes
+      herbivores = herbivores.filter(h => h.energy > 0);
+      carnivores = carnivores.filter(c => c.energy > 0);
+      
+      // Dessiner les entités
+      plants.forEach(p => p.draw(ctx));
+      herbivores.forEach(h => h.draw(ctx));
+      carnivores.forEach(c => c.draw(ctx));
+      
+      // Croissance des plantes selon un modèle logistique
+      if (plants.length < plantCarryingCapacity && Math.random() < getPlantGrowthProbability()) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        plants.push(new Plant(x, y, Math.random() * 5, 1));
+      }
+      
+      // Mise à jour des statistiques affichées
+      document.getElementById('plantCount').textContent = plants.length;
+      document.getElementById('herbivoreCount').textContent = herbivores.length;
+      document.getElementById('carnivoreCount').textContent = carnivores.length;
+      // Calcul des générations moyennes pour affichage
+      const avgHerbGen = herbivores.length ? herbivores.reduce((sum, h) => sum + h.generation, 0) / herbivores.length : 1;
+      const avgCarnGen = carnivores.length ? carnivores.reduce((sum, c) => sum + c.generation, 0) / carnivores.length : 1;
+      document.getElementById('herbGenerationAvg').textContent = avgHerbGen.toFixed(2);
+      document.getElementById('carnGenerationAvg').textContent = avgCarnGen.toFixed(2);
+      
+      // Mise à jour du graphique toutes les 10 itérations
+      if (timeStep % 10 === 0) {
+        chartLabels.push(timeStep.toString());
+        plantHistory.push(plants.length);
+        herbivoreHistory.push(herbivores.length);
+        carnivoreHistory.push(carnivores.length);
+        if (chartLabels.length > 50) {
+          chartLabels.shift();
+          plantHistory.shift();
+          herbivoreHistory.shift();
+          carnivoreHistory.shift();
+        }
+        populationChart.update();
+      }
+      
+      timeStep++;
+      requestAnimationFrame(simulationStep);
+    }
+    
+    // Démarrage de la simulation
+    simulationStep();
+  </script>
+</body>
+</html>
